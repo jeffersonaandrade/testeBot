@@ -1,10 +1,11 @@
-const config = require('./config');
-const { logger, WhatsAppUtils } = require('./utils');
+const config = require('../../config');
+const { WhatsAppUtils } = require('../utils/whatsapp');
 
 class OpcoesController {
-  constructor() {
-    this.sessoes = new Map(); // Sessões ativas por usuário
+  constructor(config, logger) {
     this.config = config.opcoes;
+    this.logger = logger;
+    this.sessoes = new Map();
   }
 
   // Verificar se mensagem é uma opção válida
@@ -47,7 +48,7 @@ class OpcoesController {
       timestamp: Date.now()
     });
 
-    logger.info('Opção selecionada', { 
+    this.logger.info('Opção selecionada', { 
       telefone, 
       opcao: opcao.numero, 
       intencao: opcao.intencao,
@@ -139,7 +140,7 @@ class OpcoesController {
   limparSessaoExpirada(telefone) {
     if (this.verificarTimeout(telefone)) {
       this.sessoes.delete(telefone);
-      logger.info('Sessão expirada removida', { telefone });
+      this.logger.info('Sessão expirada removida', { telefone });
       return true;
     }
     return false;
@@ -277,7 +278,7 @@ Obrigado pela preferência!`
   // Limpar todas as sessões
   limparTodasSessoes() {
     this.sessoes.clear();
-    logger.info('Todas as sessões foram limpas');
+    this.logger.info('Todas as sessões foram limpas');
   }
 
   // Obter estatísticas

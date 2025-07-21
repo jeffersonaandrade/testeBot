@@ -1,233 +1,53 @@
-# ========================================
-# 🤖 WHATSAPP BOT - .gitignore
-# ========================================
-
-# ========================================
-# 🔐 ARQUIVOS SENSÍVEIS
-# ========================================
-
-# Variáveis de ambiente
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-
-# Chaves de API
-*.key
-*.pem
-api-keys.json
-secrets.json
-
-# ========================================
-# 📁 DADOS DO BOT
-# ========================================
-
-# Logs do sistema
-bot-logs.txt
-*.log
-logs/
-
-# Controle de usuários
-contadores-usuarios.json
-usuarios-bloqueados.json
-
-# Cache de respostas
-cache-respostas.json
-cache-*.json
-
-# Controle de API
-controle-api.json
-api-stats.json
-
-# Leads e dados de clientes
-leads.csv
-leads-*.csv
-clientes.csv
-
-# Sessões e dados temporários
-sessoes-*.json
-temp-*.json
-
-# ========================================
-# 🧠 DADOS DE IA/MACHINE LEARNING
-# ========================================
-
-# Modelos treinados
-*.model
-*.bin
-models/
-
-# Dados de treinamento
-training-data/
-datasets/
-
-# Cache de embeddings
-embeddings/
-vector-cache/
-
-# ========================================
-# 📱 WHATSAPP WEB
-# ========================================
-
-# Sessões do WhatsApp Web
-.wwebjs_auth/
-.wwebjs_cache/
-.wwebjs_*/
-session.json
-session-*.json
-
-# QR Codes gerados
-qr-code.png
-qr-*.png
-qr.png
-
-# Screenshots e mídia
-screenshots/
-media/
-downloads/
-
-# Arquivos específicos do WhatsApp Web
-*.session
-*.session.json
-.wwebjs_auth/session/
-.wwebjs_cache/*
-
-# ========================================
-# 🐍 NODE.JS
-# ========================================
-
 # Dependências
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Cache do npm
-.npm
-.eslintcache
+# Arquivos de ambiente
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Arquivos de lock (opcional - alguns preferem versionar)
-# package-lock.json
-# yarn.lock
+# Logs
+logs
+*.log
+bot-logs.txt
 
-# ========================================
-# 🔧 DESENVOLVIMENTO
-# ========================================
+# Arquivos de dados
+*.csv
+*.json
+!package.json
+!package-lock.json
 
-# IDEs e editores
+# Cache
+cache-*.json
+controle-*.json
+
+# WhatsApp Web
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# Arquivos temporários
-*.tmp
-*.temp
-.DS_Store
-Thumbs.db
-
-# Arquivos de backup
-*.bak
-*.backup
-*.old
-
-# ========================================
-# 📊 MONITORAMENTO E TESTES
-# ========================================
-
-# Relatórios de teste
-test-results/
+# Testes
 coverage/
 .nyc_output/
 
-# Arquivos de debug
-debug.log
-debug-*.log
-
-# Métricas e analytics
-metrics.json
-analytics.json
-
-# ========================================
-# 🚀 DEPLOYMENT
-# ========================================
-
-# Arquivos de build
+# Build
 dist/
 build/
-out/
 
-# Configurações de servidor
-server-config.json
-deploy-config.json
-
-# Certificados SSL
-*.crt
-*.csr
-*.p12
-
-# ========================================
-# 📝 DOCUMENTAÇÃO TEMPORÁRIA
-# ========================================
-
-# Rascunhos
-drafts/
-*.draft
-
-# Notas temporárias
-notes.txt
-todo.txt
-
-# ========================================
-# 🎯 ARQUIVOS ESPECÍFICOS DO PROJETO
-# ========================================
-
-# Configurações personalizadas
-config-local.js
-config-dev.js
-config-prod.js
-
-# Arquivos de teste temporários
-test-*.js
-temp-test-*.js
-
-# Dados de exemplo
-sample-data/
-exemplos/
-
-# ========================================
-# 🔒 SEGURANÇA
-# ========================================
-
-# Arquivos com senhas
-passwords.txt
-credentials.txt
-
-# Chaves privadas
-private-*.key
-*.private
-
-# Tokens de acesso
-access-tokens.json
-tokens.json
-
-# ========================================
-# 📋 RESUMO DOS ARQUIVOS IMPORTANTES
-# ========================================
-
-# ✅ ARQUIVOS QUE DEVEM SER VERSIONADOS:
-# - package.json
-# - config.js (sem dados sensíveis)
-# - *.js (código fonte)
-# - README.md
-# - .gitignore
-
-# ❌ ARQUIVOS QUE NÃO DEVEM SER VERSIONADOS:
-# - .env (chaves de API)
-# - *.json (dados de usuários, cache, logs)
-# - *.csv (leads e dados sensíveis)
-# - node_modules/ (dependências)
-# - .wwebjs_* (sessões WhatsApp)
-# - *.log (logs do sistema) 
+# Backups
+*.backup.*
+index.js.backup.*

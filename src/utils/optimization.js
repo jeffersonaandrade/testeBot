@@ -1,62 +1,4 @@
-const fs = require("fs");
-const path = require("path");
-const config = require("./config");
-
-// Sistema de logs centralizado
-class Logger {
-  constructor() {
-    this.config = config.logs;
-  }
-
-  log(nivel, mensagem, dados = null) {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-      timestamp,
-      nivel,
-      mensagem,
-      dados
-    };
-
-    // Log no console
-    if (this.config.mostrarConsole) {
-      const emoji = this.getEmoji(nivel);
-      console.log(`${emoji} [${nivel.toUpperCase()}] ${mensagem}`);
-      if (dados) {
-        console.log(`   Dados:`, dados);
-      }
-    }
-
-    // Salvar no arquivo
-    if (this.config.salvarArquivo) {
-      this.salvarLog(logEntry);
-    }
-  }
-
-  getEmoji(nivel) {
-    const emojis = {
-      debug: '🔍',
-      info: 'ℹ️',
-      warn: '⚠️',
-      error: '❌'
-    };
-    return emojis[nivel] || '📝';
-  }
-
-  salvarLog(logEntry) {
-    try {
-      const logPath = path.join(__dirname, config.bot.arquivoLogs);
-      const logLine = JSON.stringify(logEntry) + '\n';
-      fs.appendFileSync(logPath, logLine);
-    } catch (error) {
-      console.error('Erro ao salvar log:', error.message);
-    }
-  }
-
-  debug(mensagem, dados) { this.log('debug', mensagem, dados); }
-  info(mensagem, dados) { this.log('info', mensagem, dados); }
-  warn(mensagem, dados) { this.log('warn', mensagem, dados); }
-  error(mensagem, dados) { this.log('error', mensagem, dados); }
-}
+const { FileUtils } = require('./file');
 
 // Sistema de cache para otimizar tokens
 class CacheManager {
@@ -91,7 +33,7 @@ class CacheManager {
     }
 
     this.salvarCache();
-    logger.debug('Item adicionado ao cache', { chave, tokens: item.tokens });
+    console.log('Item adicionado ao cache', { chave, tokens: item.tokens });
   }
 
   // Buscar no cache
@@ -100,7 +42,7 @@ class CacheManager {
     const item = this.cache.get(chave);
 
     if (item && (Date.now() - item.timestamp) < this.cacheExpiry) {
-      logger.info('Resposta encontrada no cache', { chave, tokens: item.tokens });
+      console.log('Resposta encontrada no cache', { chave, tokens: item.tokens });
       return item.resposta;
     }
 
@@ -120,13 +62,13 @@ class CacheManager {
   // Carregar cache do arquivo
   carregarCache() {
     try {
-      if (fs.existsSync(this.cacheFile)) {
-        const dados = JSON.parse(fs.readFileSync(this.cacheFile, 'utf8'));
+      const dados = FileUtils.carregarJSON(this.cacheFile);
+      if (dados) {
         this.cache = new Map(dados);
-        logger.info('Cache carregado', { tamanho: this.cache.size });
+        console.log('Cache carregado', { tamanho: this.cache.size });
       }
     } catch (error) {
-      logger.error('Erro ao carregar cache', { error: error.message });
+      console.error('Erro ao carregar cache', { error: error.message });
     }
   }
 
@@ -134,9 +76,9 @@ class CacheManager {
   salvarCache() {
     try {
       const dados = Array.from(this.cache.entries());
-      fs.writeFileSync(this.cacheFile, JSON.stringify(dados, null, 2));
+      FileUtils.salvarJSON(dados, this.cacheFile);
     } catch (error) {
-      logger.error('Erro ao salvar cache', { error: error.message });
+      console.error('Erro ao salvar cache', { error: error.message });
     }
   }
 
@@ -150,7 +92,6 @@ class CacheManager {
   }
 
   calcularTaxaUso() {
-    // Implementar cálculo de taxa de uso do cache
     return (this.cache.size / this.maxCacheSize * 100).toFixed(1);
   }
 }
@@ -184,7 +125,7 @@ class MessageOptimizer {
     const economia = tokensAntes - tokensDepois;
 
     if (economia > 0) {
-      logger.info('Mensagem otimizada', { 
+      console.log('Mensagem otimizada', { 
         tokensAntes, 
         tokensDepois, 
         economia,
@@ -323,10 +264,10 @@ class MessageGrouper {
     // Limpar grupo
     this.grupos.delete(telefone);
 
-    logger.info('Grupo processado', { 
+    console.log('Grupo processado', { 
       telefone, 
       numMensagens: grupo.mensagens.length,
-      mensagemCombinada: Formatter.truncarTexto(mensagemCombinada, 100)
+      mensagemCombinada: this.truncarTexto(mensagemCombinada, 100)
     });
 
     return mensagemCombinada;
@@ -341,100 +282,8 @@ class MessageGrouper {
       }
     }
   }
-}
 
-// Utilitários para manipulação de arquivos
-class FileUtils {
-  static salvarCSV(dados, arquivo) {
-    try {
-      const csvPath = path.join(__dirname, arquivo);
-      
-      // Criar cabeçalho se arquivo não existir
-      if (!fs.existsSync(csvPath)) {
-        const cabecalho = Object.keys(dados[0]).join(',') + '\n';
-        fs.writeFileSync(csvPath, cabecalho);
-      }
-      
-      // Adicionar linha
-      const linha = Object.values(dados).join(',') + '\n';
-      fs.appendFileSync(csvPath, linha);
-      
-      return true;
-    } catch (error) {
-      logger.error('Erro ao salvar CSV', { arquivo, error: error.message });
-      return false;
-    }
-  }
-
-  static carregarJSON(arquivo) {
-    try {
-      if (fs.existsSync(arquivo)) {
-        return JSON.parse(fs.readFileSync(arquivo, 'utf8'));
-      }
-    } catch (error) {
-      logger.error('Erro ao carregar JSON', { arquivo, error: error.message });
-    }
-    return null;
-  }
-
-  static salvarJSON(dados, arquivo) {
-    try {
-      fs.writeFileSync(arquivo, JSON.stringify(dados, null, 2));
-      return true;
-    } catch (error) {
-      logger.error('Erro ao salvar JSON', { arquivo, error: error.message });
-      return false;
-    }
-  }
-}
-
-// Utilitários para validação
-class Validator {
-  static validarTelefone(telefone) {
-    // Remove caracteres especiais e valida formato brasileiro
-    const limpo = telefone.replace(/\D/g, '');
-    return limpo.length >= 10 && limpo.length <= 11;
-  }
-
-  static validarEmail(email) {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
-  }
-
-  static validarMensagem(mensagem) {
-    return mensagem && mensagem.trim().length > 0 && mensagem.length <= 1000;
-  }
-
-  static sanitizarTexto(texto) {
-    return texto
-      .trim()
-      .replace(/[<>]/g, '') // Remove caracteres potencialmente perigosos
-      .substring(0, 1000); // Limita tamanho
-  }
-}
-
-// Utilitários para formatação
-class Formatter {
-  static formatarData(data) {
-    return new Date(data).toLocaleString('pt-BR');
-  }
-
-  static formatarTelefone(telefone) {
-    const limpo = telefone.replace(/\D/g, '');
-    if (limpo.length === 11) {
-      return `(${limpo.slice(0,2)}) ${limpo.slice(2,7)}-${limpo.slice(7)}`;
-    }
-    return telefone;
-  }
-
-  static formatarMoeda(valor) {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(valor);
-  }
-
-  static truncarTexto(texto, maxLength = 100) {
+  truncarTexto(texto, maxLength = 100) {
     if (texto.length <= maxLength) return texto;
     return texto.substring(0, maxLength) + '...';
   }
@@ -481,57 +330,16 @@ class ApiUtils {
   }
 }
 
-// Utilitários para WhatsApp
-class WhatsAppUtils {
-  static extrairNomeContato(from) {
-    return from.split('@')[0] || 'Contato';
-  }
-
-  static extrairTelefone(from) {
-    return from.replace('@c.us', '');
-  }
-
-  static formatarMensagem(mensagem, dados = {}) {
-    // Substituir placeholders por dados reais
-    return mensagem
-      .replace('{nome_empresa}', config.empresa.nome)
-      .replace('{telefone_empresa}', config.empresa.telefone)
-      .replace('{email_empresa}', config.empresa.email)
-      .replace('{horario_atendimento}', config.empresa.horarioAtendimento)
-      .replace('{website}', config.empresa.website);
-  }
-
-  static async enviarMensagemComDelay(client, to, mensagem, delay = 2000) {
-    try {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      await client.sendMessage(to, mensagem);
-      return true;
-    } catch (error) {
-      logger.error('Erro ao enviar mensagem com delay', { to, error: error.message });
-      return false;
-    }
-  }
-}
-
-// Instância global do logger
-const logger = new Logger();
-
 // Instâncias globais dos otimizadores
 const cacheManager = new CacheManager();
 const messageOptimizer = new MessageOptimizer();
 const messageGrouper = new MessageGrouper();
 
 module.exports = {
-  Logger,
   CacheManager,
   MessageOptimizer,
   MessageGrouper,
-  FileUtils,
-  Validator,
-  Formatter,
   ApiUtils,
-  WhatsAppUtils,
-  logger,
   cacheManager,
   messageOptimizer,
   messageGrouper

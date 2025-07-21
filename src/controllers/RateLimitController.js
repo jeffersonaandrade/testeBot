@@ -1,10 +1,11 @@
+const config = require('../../config');
 const fs = require('fs');
 const path = require('path');
-const { logger } = require('./utils');
 
 class RateLimitController {
-  constructor() {
-    this.config = require('./config');
+  constructor(config, logger) {
+    this.config = config;
+    this.logger = logger;
     this.arquivoControle = this.config.api.groq.arquivoControle;
     this.rateLimits = this.config.api.groq.rateLimits;
     this.controle = this.carregarControle();
@@ -16,7 +17,7 @@ class RateLimitController {
     this.sistemaAtivo = true;
     this.motivoDesativacao = null;
     
-    logger.info('Rate Limit Controller inicializado', {
+    this.logger.info('Rate Limit Controller inicializado', {
       margemSeguranca: `${this.margemSeguranca * 100}%`,
       limites: this.rateLimits
     });
@@ -27,11 +28,11 @@ class RateLimitController {
     try {
       if (fs.existsSync(this.arquivoControle)) {
         const dados = JSON.parse(fs.readFileSync(this.arquivoControle, 'utf8'));
-        logger.info('Controle de rate limits carregado', dados);
+        this.logger.info('Controle de rate limits carregado', dados);
         return dados;
       }
     } catch (error) {
-      logger.error('Erro ao carregar controle de rate limits', { error: error.message });
+      this.logger.error('Erro ao carregar controle de rate limits', { error: error.message });
     }
 
     // Inicializar controle
@@ -56,7 +57,7 @@ class RateLimitController {
     try {
       fs.writeFileSync(this.arquivoControle, JSON.stringify(controle, null, 2));
     } catch (error) {
-      logger.error('Erro ao salvar controle de rate limits', { error: error.message });
+      this.logger.error('Erro ao salvar controle de rate limits', { error: error.message });
     }
   }
 
@@ -83,14 +84,14 @@ class RateLimitController {
     if (agora >= this.controle.requests.minuto.resetTime) {
       this.controle.requests.minuto = { contador: 0, resetTime: this.getNextMinute() };
       this.controle.tokens.minuto = { contador: 0, resetTime: this.getNextMinute() };
-      logger.info('Contadores por minuto resetados');
+      this.logger.info('Contadores por minuto resetados');
     }
     
     // Reset por dia
     if (agora >= this.controle.requests.dia.resetTime) {
       this.controle.requests.dia = { contador: 0, resetTime: this.getNextDay() };
       this.controle.tokens.dia = { contador: 0, resetTime: this.getNextDay() };
-      logger.info('Contadores por dia resetados');
+      this.logger.info('Contadores por dia resetados');
     }
     
     this.controle.ultimaVerificacao = agora;
@@ -116,7 +117,7 @@ class RateLimitController {
     if (proximoLimiteRPM || proximoLimiteRPD || proximoLimiteTPM || proximoLimiteTPD) {
       this.desativarSistema('rate_limit_proximo');
       
-      logger.warn('Rate limit próximo - Sistema desativado', {
+      this.logger.warn('Rate limit próximo - Sistema desativado', {
         RPM: `${this.controle.requests.minuto.contador}/${limitesRPM}`,
         RPD: `${this.controle.requests.dia.contador}/${limitesRPD}`,
         TPM: `${this.controle.tokens.minuto.contador}/${limitesTPM}`,
@@ -141,7 +142,7 @@ class RateLimitController {
     
     this.salvarControle(this.controle);
     
-    logger.info('Uso registrado', {
+    this.logger.info('Uso registrado', {
       requests: {
         minuto: this.controle.requests.minuto.contador,
         dia: this.controle.requests.dia.contador
@@ -158,7 +159,7 @@ class RateLimitController {
     this.sistemaAtivo = false;
     this.motivoDesativacao = motivo;
     
-    logger.warn('Sistema desativado por proteção de rate limits', { motivo });
+    this.logger.warn('Sistema desativado por proteção de rate limits', { motivo });
   }
 
   // Reativar sistema (manual)
@@ -166,7 +167,7 @@ class RateLimitController {
     this.sistemaAtivo = true;
     this.motivoDesativacao = null;
     
-    logger.info('Sistema reativado manualmente');
+    this.logger.info('Sistema reativado manualmente');
   }
 
   // Verificar se sistema está ativo

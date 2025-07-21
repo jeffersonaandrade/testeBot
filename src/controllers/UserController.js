@@ -1,10 +1,13 @@
+const { FileUtils } = require('../utils/file');
+const { Formatter } = require('../utils/optimization');
+const config = require('../../config');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
-const { logger, FileUtils, Formatter } = require('./utils');
 
 class UserController {
-  constructor() {
+  constructor(config, logger) {
+    this.config = config;
+    this.logger = logger;
     this.contadores = new Map(); // Contadores de respostas por usuário
     this.bloqueados = new Map(); // Usuários bloqueados temporariamente
     this.arquivoContadores = 'contadores-usuarios.json';
@@ -21,17 +24,17 @@ class UserController {
       if (fs.existsSync(this.arquivoContadores)) {
         const dados = JSON.parse(fs.readFileSync(this.arquivoContadores, 'utf8'));
         this.contadores = new Map(dados);
-        logger.info('Contadores de usuários carregados', { total: this.contadores.size });
+        this.logger.info('Contadores de usuários carregados', { total: this.contadores.size });
       }
 
       // Carregar bloqueados
       if (fs.existsSync(this.arquivoBloqueados)) {
         const dados = JSON.parse(fs.readFileSync(this.arquivoBloqueados, 'utf8'));
         this.bloqueados = new Map(dados);
-        logger.info('Usuários bloqueados carregados', { total: this.bloqueados.size });
+        this.logger.info('Usuários bloqueados carregados', { total: this.bloqueados.size });
       }
     } catch (error) {
-      logger.error('Erro ao carregar dados de usuários', { error: error.message });
+      this.logger.error('Erro ao carregar dados de usuários', { error: error.message });
     }
   }
 
@@ -46,7 +49,7 @@ class UserController {
       const dadosBloqueados = Array.from(this.bloqueados.entries());
       fs.writeFileSync(this.arquivoBloqueados, JSON.stringify(dadosBloqueados, null, 2));
     } catch (error) {
-      logger.error('Erro ao salvar dados de usuários', { error: error.message });
+      this.logger.error('Erro ao salvar dados de usuários', { error: error.message });
     }
   }
 
@@ -54,7 +57,7 @@ class UserController {
   podeReceberResposta(telefone, intencao = null) {
     // 1. Verificar se está bloqueado
     if (this.isBloqueado(telefone)) {
-      logger.info('Usuário bloqueado tentou enviar mensagem', { telefone });
+      this.logger.info('Usuário bloqueado tentou enviar mensagem', { telefone });
       return {
         pode: false,
         motivo: 'bloqueado',
@@ -63,17 +66,17 @@ class UserController {
     }
 
     // 2. Verificar limite de respostas
-    if (config.controleUsuarios.numeroRespostas.ativo) {
+    if (this.config.controleUsuarios.numeroRespostas.ativo) {
       const contador = this.getContadorRespostas(telefone);
-      const maxRespostas = config.controleUsuarios.numeroRespostas.maxRespostas;
+      const maxRespostas = this.config.controleUsuarios.numeroRespostas.maxRespostas;
 
       // Lógica inteligente: permitir mais respostas se for INTERESSADO
       const limiteEfetivo = (intencao === 'INTERESSADO' && 
-                           config.controleUsuarios.numeroRespostas.permitirContinuarSeInteressado) 
+                           this.config.controleUsuarios.numeroRespostas.permitirContinuarSeInteressado) 
                            ? maxRespostas + 2 : maxRespostas;
 
       if (contador >= limiteEfetivo) {
-        logger.info('Usuário atingiu limite de respostas', { 
+        this.logger.info('Usuário atingiu limite de respostas', { 
           telefone, 
           contador, 
           maxRespostas: limiteEfetivo,
@@ -93,7 +96,7 @@ class UserController {
 
   // Incrementar contador de respostas
   incrementarContador(telefone) {
-    if (!config.controleUsuarios.numeroRespostas.ativo) return;
+    if (!this.config.controleUsuarios.numeroRespostas.ativo) return;
 
     const agora = Date.now();
     const contadorAtual = this.contadores.get(telefone) || {
@@ -103,7 +106,7 @@ class UserController {
     };
 
     // Reset diário se configurado
-    if (config.controleUsuarios.numeroRespostas.resetDiario) {
+    if (this.config.controleUsuarios.numeroRespostas.resetDiario) {
       const hoje = new Date().toDateString();
       if (contadorAtual.data !== hoje) {
         contadorAtual.contador = 0;
@@ -117,10 +120,10 @@ class UserController {
     this.contadores.set(telefone, contadorAtual);
     this.salvarDados();
 
-    logger.info('Contador de respostas incrementado', { 
+    this.logger.info('Contador de respostas incrementado', { 
       telefone, 
       contador: contadorAtual.contador,
-      maxRespostas: config.controleUsuarios.numeroRespostas.maxRespostas
+      maxRespostas: this.config.controleUsuarios.numeroRespostas.maxRespostas
     });
   }
 
@@ -130,7 +133,7 @@ class UserController {
     if (!contador) return 0;
 
     // Verificar se precisa reset diário
-    if (config.controleUsuarios.numeroRespostas.resetDiario) {
+    if (this.config.controleUsuarios.numeroRespostas.resetDiario) {
       const hoje = new Date().toDateString();
       if (contador.data !== hoje) {
         return 0;
@@ -142,9 +145,9 @@ class UserController {
 
   // Bloquear usuário após transferência
   bloquearUsuario(telefone, motivo = 'transferencia') {
-    if (!config.controleUsuarios.bloqueioTransferencia.ativo) return;
+    if (!this.config.controleUsuarios.bloqueioTransferencia.ativo) return;
 
-    const tempoBloqueio = config.controleUsuarios.bloqueioTransferencia.tempoBloqueio;
+    const tempoBloqueio = this.config.controleUsuarios.bloqueioTransferencia.tempoBloqueio;
     const bloqueio = {
       telefone,
       motivo,
@@ -156,7 +159,7 @@ class UserController {
     this.bloqueados.set(telefone, bloqueio);
     this.salvarDados();
 
-    logger.info('Usuário bloqueado após transferência', { 
+    this.logger.info('Usuário bloqueado após transferência', { 
       telefone, 
       motivo,
       expiraEm: new Date(bloqueio.expiraEm).toLocaleString()
@@ -172,7 +175,7 @@ class UserController {
     if (Date.now() > bloqueio.expiraEm) {
       this.bloqueados.delete(telefone);
       this.salvarDados();
-      logger.info('Bloqueio expirado automaticamente', { telefone });
+      this.logger.info('Bloqueio expirado automaticamente', { telefone });
       return false;
     }
 
@@ -193,7 +196,7 @@ class UserController {
     if (this.bloqueados.has(telefone)) {
       this.bloqueados.delete(telefone);
       this.salvarDados();
-      logger.info('Usuário desbloqueado manualmente', { telefone });
+      this.logger.info('Usuário desbloqueado manualmente', { telefone });
       return true;
     }
     return false;
@@ -204,7 +207,7 @@ class UserController {
     if (this.contadores.has(telefone)) {
       this.contadores.delete(telefone);
       this.salvarDados();
-      logger.info('Contador de usuário resetado', { telefone });
+      this.logger.info('Contador de usuário resetado', { telefone });
       return true;
     }
     return false;
@@ -213,10 +216,10 @@ class UserController {
   // Obter mensagem de limite atingido
   getMensagemLimite(telefone) {
     const contador = this.getContadorRespostas(telefone);
-    const maxRespostas = config.controleUsuarios.numeroRespostas.maxRespostas;
+    const maxRespostas = this.config.controleUsuarios.numeroRespostas.maxRespostas;
     
-    return config.controleUsuarios.numeroRespostas.mensagemLimite
-      .replace('{telefone_empresa}', config.empresa.telefone)
+    return this.config.controleUsuarios.numeroRespostas.mensagemLimite
+      .replace('{telefone_empresa}', this.config.empresa.telefone)
       .replace('{contador}', contador)
       .replace('{max_respostas}', maxRespostas);
   }
@@ -236,9 +239,9 @@ class UserController {
       tempoFormatado = `${horasRestantes} horas`;
     }
     
-    return config.controleUsuarios.bloqueioTransferencia.mensagemBloqueio
+    return this.config.controleUsuarios.bloqueioTransferencia.mensagemBloqueio
       .replace('{tempo_bloqueio}', tempoFormatado)
-      .replace('{telefone_empresa}', config.empresa.telefone);
+      .replace('{telefone_empresa}', this.config.empresa.telefone);
   }
 
   // Limpeza automática de dados antigos
@@ -272,7 +275,7 @@ class UserController {
 
     if (contadoresRemovidos > 0 || bloqueiosRemovidos > 0) {
       this.salvarDados();
-      logger.info('Limpeza automática executada', { 
+      this.logger.info('Limpeza automática executada', { 
         contadoresRemovidos, 
         bloqueiosRemovidos 
       });
@@ -304,15 +307,15 @@ class UserController {
       contadoresAtivos,
       totalBloqueios: this.bloqueados.size,
       bloqueiosAtivos,
-      maxRespostas: config.controleUsuarios.numeroRespostas.maxRespostas,
-      tempoBloqueio: config.controleUsuarios.bloqueioTransferencia.tempoBloqueio / 60000 + ' minutos'
+      maxRespostas: this.config.controleUsuarios.numeroRespostas.maxRespostas,
+      tempoBloqueio: this.config.controleUsuarios.bloqueioTransferencia.tempoBloqueio / 60000 + ' minutos'
     };
   }
 
   // Listar usuários com contadores altos
   getUsuariosComContadorAlto() {
     const usuarios = [];
-    const maxRespostas = config.controleUsuarios.numeroRespostas.maxRespostas;
+    const maxRespostas = this.config.controleUsuarios.numeroRespostas.maxRespostas;
 
     for (const [telefone, contador] of this.contadores.entries()) {
       if (contador.contador >= maxRespostas * 0.8) { // 80% do limite

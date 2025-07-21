@@ -1,9 +1,11 @@
-const { FileUtils, ApiUtils, logger, cacheManager, messageOptimizer, messageGrouper } = require('./utils');
-const config = require('./config');
+const { FileUtils } = require('../utils/file');
+const { ApiUtils, cacheManager, messageOptimizer, messageGrouper } = require('../utils/optimization');
+const config = require('../../config');
 
 class ApiController {
-  constructor() {
+  constructor(config, logger) {
     this.config = config.api.groq;
+    this.logger = logger;
     this.arquivoControle = this.config.arquivoControle;
     this.dadosControle = this.carregarDadosControle();
   }
@@ -84,7 +86,7 @@ class ApiController {
     const percentualTPM = ((tpm / this.config.rateLimits.TPM) * 100).toFixed(1);
     const percentualTPD = ((tpd / this.config.rateLimits.TPD) * 100).toFixed(1);
 
-    logger.info('Status API', {
+    this.logger.info('Status API', {
       RPM: `${rpm}/${this.config.rateLimits.RPM} (${percentualRPM}%)`,
       RPD: `${rpd}/${this.config.rateLimits.RPD} (${percentualRPD}%)`,
       TPM: `${tpm}/${this.config.rateLimits.TPM} (${percentualTPM}%)`,
@@ -93,16 +95,16 @@ class ApiController {
 
     // Avisos de limite próximo
     if (rpm >= this.config.rateLimits.RPM * 0.8) {
-      logger.warn('Limite RPM próximo');
+      this.logger.warn('Limite RPM próximo');
     }
     if (rpd >= this.config.rateLimits.RPD * 0.8) {
-      logger.warn('Limite RPD próximo');
+      this.logger.warn('Limite RPD próximo');
     }
     if (tpm >= this.config.rateLimits.TPM * 0.8) {
-      logger.warn('Limite TPM próximo');
+      this.logger.warn('Limite TPM próximo');
     }
     if (tpd >= this.config.rateLimits.TPD * 0.8) {
-      logger.warn('Limite TPD próximo');
+      this.logger.warn('Limite TPD próximo');
     }
   }
 
@@ -113,7 +115,7 @@ class ApiController {
     if (this.dadosControle.ultimoMinuto === minutoAtual && 
         this.dadosControle.chamadasMinuto >= this.config.rateLimits.RPM * 0.9) {
       const tempoRestante = 60000 - (Date.now() % 60000);
-      logger.info(`Aguardando ${Math.ceil(tempoRestante/1000)}s para reset do RPM`);
+      this.logger.info(`Aguardando ${Math.ceil(tempoRestante/1000)}s para reset do RPM`);
       await new Promise(resolve => setTimeout(resolve, tempoRestante));
     }
   }
@@ -123,7 +125,7 @@ class ApiController {
     // 1. Verificar cache primeiro
     const respostaCache = cacheManager.buscar(mensagem, 'classificacao');
     if (respostaCache) {
-      logger.info('Classificação encontrada no cache');
+      this.logger.info('Classificação encontrada no cache');
       return respostaCache;
     }
 
@@ -132,7 +134,7 @@ class ApiController {
     
     // 3. Verificar se pode usar API
     if (!this.podeUsarAPI(mensagemOtimizada)) {
-      logger.info('Usando classificação local (limite API atingido)');
+      this.logger.info('Usando classificação local (limite API atingido)');
       return this.classificarIntencaoLocal(mensagem);
     }
 
@@ -161,14 +163,14 @@ class ApiController {
       // Salvar no cache
       cacheManager.adicionar(mensagem, 'classificacao', classificacao);
       
-      logger.info('Classificação via API', { 
+      this.logger.info('Classificação via API', { 
         mensagem: Formatter.truncarTexto(mensagem), 
         mensagemOtimizada: Formatter.truncarTexto(mensagemOtimizada),
         classificacao 
       });
       return classificacao;
     } else {
-      logger.error('Erro na classificação via API', resultado);
+      this.logger.error('Erro na classificação via API', resultado);
       return this.classificarIntencaoLocal(mensagem);
     }
   }
@@ -180,7 +182,7 @@ class ApiController {
     // Verificar COMPRADOR primeiro (mais específico)
     for (const palavra of config.palavrasChave.comprador) {
       if (msg.includes(palavra)) {
-        logger.info('Classificação local: COMPRADOR', { palavra });
+        this.logger.info('Classificação local: COMPRADOR', { palavra });
         return "COMPRADOR";
       }
     }
@@ -188,13 +190,13 @@ class ApiController {
     // Verificar INTERESSADO
     for (const palavra of config.palavrasChave.interessado) {
       if (msg.includes(palavra)) {
-        logger.info('Classificação local: INTERESSADO', { palavra });
+        this.logger.info('Classificação local: INTERESSADO', { palavra });
         return "INTERESSADO";
       }
     }
 
     // Se não encontrou palavras específicas, é CURIOSO
-    logger.info('Classificação local: CURIOSO');
+    this.logger.info('Classificação local: CURIOSO');
     return "CURIOSO";
   }
 
@@ -203,7 +205,7 @@ class ApiController {
     // 1. Verificar cache primeiro
     const respostaCache = cacheManager.buscar(mensagem, intencao);
     if (respostaCache) {
-      logger.info('Resposta encontrada no cache');
+      this.logger.info('Resposta encontrada no cache');
       return respostaCache;
     }
 
@@ -212,7 +214,7 @@ class ApiController {
     
     // 3. Verificar se pode usar API
     if (!this.podeUsarAPI(mensagemOtimizada)) {
-      logger.info('Usando resposta pré-definida (limite API atingido)');
+      this.logger.info('Usando resposta pré-definida (limite API atingido)');
       return this.obterRespostaPredefinida(intencao);
     }
 
@@ -241,14 +243,14 @@ class ApiController {
       // Salvar no cache
       cacheManager.adicionar(mensagem, intencao, resposta);
       
-      logger.info('Resposta gerada via API', { 
+      this.logger.info('Resposta gerada via API', { 
         intencao, 
         mensagemOtimizada: Formatter.truncarTexto(mensagemOtimizada),
         resposta: Formatter.truncarTexto(resposta) 
       });
       return resposta;
     } else {
-      logger.error('Erro na geração de resposta via API', resultado);
+      this.logger.error('Erro na geração de resposta via API', resultado);
       return this.obterRespostaPredefinida(intencao);
     }
   }
@@ -257,14 +259,14 @@ class ApiController {
   obterRespostaPredefinida(intencao) {
     const respostas = config.respostas[intencao.toLowerCase()];
     if (!respostas || respostas.length === 0) {
-      logger.warn('Tipo de resposta não encontrado', { intencao });
+      this.logger.warn('Tipo de resposta não encontrado', { intencao });
       return config.respostas.limiteExcedido[0];
     }
 
     const indice = Math.floor(Math.random() * respostas.length);
     const resposta = respostas[indice];
     
-    logger.info('Resposta pré-definida', { intencao, indice });
+    this.logger.info('Resposta pré-definida', { intencao, indice });
     return resposta;
   }
 
@@ -294,7 +296,7 @@ class ApiController {
       ultimoMes: new Date().getFullYear() + '-' + (new Date().getMonth() + 1)
     };
     this.salvarDadosControle();
-    logger.info('Contadores resetados');
+    this.logger.info('Contadores resetados');
   }
 }
 
