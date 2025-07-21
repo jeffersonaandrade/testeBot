@@ -42,7 +42,7 @@ class OpcoesController {
 
     // Atualizar sessão do usuário
     this.atualizarSessao(telefone, {
-      menuAtual: tipo,
+      menuAtual: menuAtual,
       ultimaOpcao: opcao,
       timestamp: Date.now()
     });

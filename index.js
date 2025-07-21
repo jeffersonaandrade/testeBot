@@ -8,11 +8,13 @@ const { logger, FileUtils, WhatsAppUtils, messageGrouper } = require("./utils");
 const ApiController = require("./api-controller");
 const UserController = require("./user-controller");
 const OpcoesController = require("./opcoes-controller");
+const RateLimitController = require("./rate-limit-controller");
 
 // Inicializar controladores
 const apiController = new ApiController();
 const userController = new UserController();
 const opcoesController = new OpcoesController();
+const rateLimitController = new RateLimitController();
 
 // Configurar cliente WhatsApp
 const client = new Client({
@@ -44,6 +46,23 @@ async function processarMensagem(message) {
   const prompt = message.body;
   
   if (!prompt || prompt.length < 1) return;
+
+  // Ignorar mensagens de status/stories
+  if (message.from === 'status@broadcast') {
+    logger.info('Ignorando mensagem de status', { mensagem: WhatsAppUtils.formatarMensagem(prompt) });
+    return;
+  }
+
+  // Verificar se sistema está ativo (rate limits)
+  if (!rateLimitController.sistemaEstaAtivo()) {
+    const mensagemForaDoAr = rateLimitController.getMensagemSistemaForaDoAr();
+    await message.reply(mensagemForaDoAr);
+    logger.warn('Sistema fora do ar - Mensagem de manutenção enviada', { 
+      telefone: WhatsAppUtils.extrairTelefone(message.from),
+      motivo: rateLimitController.motivoDesativacao 
+    });
+    return;
+  }
 
   try {
     const telefone = WhatsAppUtils.extrairTelefone(message.from);
@@ -131,8 +150,20 @@ async function processarMensagem(message) {
         return;
       }
       
+      // Verificar rate limits antes de usar IA
+      if (!rateLimitController.podeFazerRequisicao(200)) {
+        const mensagemForaDoAr = rateLimitController.getMensagemSistemaForaDoAr();
+        await message.reply(mensagemForaDoAr);
+        logger.warn('Rate limit próximo - IA desabilitada', { 
+          telefone,
+          mensagem: mensagemAgrupada 
+        });
+        return;
+      }
+      
       // 4. Classificar intenção do cliente
       const intencao = await apiController.classificarIntencao(mensagemAgrupada);
+      rateLimitController.registrarUso(50); // Registrar uso da classificação
       logger.info('Intenção classificada via IA', { intencao, mensagemAgrupada });
       
       // 5. Verificar limite novamente (agora com a intenção conhecida)
@@ -146,6 +177,7 @@ async function processarMensagem(message) {
       
       // 6. Gerar resposta apropriada
       const resposta = await apiController.gerarResposta(mensagemAgrupada, intencao);
+      rateLimitController.registrarUso(150); // Registrar uso da geração de resposta
       
       // 7. Salvar lead se for comprador ou interessado
       if (intencao === "COMPRADOR" || intencao === "INTERESSADO") {
